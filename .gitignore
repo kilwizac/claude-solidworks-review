@@ -11,3 +11,6 @@
 *.SLDPRT
 *.SLDASM
 *.pdf
+
+# Release builds (tools/make-release.ps1)
+dist/

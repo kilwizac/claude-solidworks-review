@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 - 2026-10-10
+
+### Added
+- **One-step install.** The release zip includes prebuilt macros and an **Install.cmd** installer. The installer:
+  - checks for SOLIDWORKS 2025+, Claude Code and Claude Desktop, and whether Group Policy blocks scripts;
+  - offers to install Claude Code with Anthropic's official installer, and opens a sign-in window;
+  - unblocks the downloaded files and copies everything to a folder you pick;
+  - keeps a customised `review-instructions.md` on upgrade.
+- **Light/dark switch** in the report header; `?theme=light|dark` in the page's address forces either one.
+- `tools/make-release.ps1` builds and publishes the release zip. It refuses `.swp` files older than their source.
+
 ## 0.1.0 - 2026-10-10
 
 First public release.

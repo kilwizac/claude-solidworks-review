@@ -53,12 +53,23 @@ Each run gets its own folder under `%TEMP%\ClaudeDrawingReview\`. Nothing is wri
 
 ### Requirements
 
-- Windows with SOLIDWORKS 2025.
-- The [Claude Code CLI](https://docs.claude.com/en/docs/claude-code/setup), installed and **signed in**: run `claude` once in a terminal and log in. Needed for the default background mode.
-  - Or [Claude Desktop](https://claude.ai/download) if you use one of the Desktop modes (see `LAUNCH_MODE` below).
-- A Claude plan or API account. Reviews count toward its usage.
+- Windows with SOLIDWORKS 2025 or newer.
+- The [Claude Code CLI](https://code.claude.com/docs/en/setup) for the default background mode. The installer below can install it and open a sign-in window for you. Claude Code needs a Claude Pro, Max, Team, Enterprise or Console account; the free plan doesn't include it. Reviews count toward that plan's usage.
+- [Claude Desktop](https://claude.ai/download) only if you use one of the Desktop modes (see `LAUNCH_MODE` below).
 
-### Build the macro
+### Install (recommended)
+
+1. Download `ClaudeSolidWorksReview-<version>.zip` from the [latest release](https://github.com/kilwizac/claude-solidworks-review/releases/latest).
+2. Extract it (right-click → **Extract All**).
+3. Double-click **Install.cmd**. The installer:
+   - checks for SOLIDWORKS, Claude Code (offering to install it with Anthropic's official installer and to sign in), and Claude Desktop;
+   - checks whether Group Policy blocks scripts;
+   - unblocks the downloaded files;
+   - copies the prebuilt macros to a folder you choose (default: `Documents\SOLIDWORKS Macros\Claude Review`). If you've customised `review-instructions.md`, it's kept on upgrade.
+
+The installer is a plain PowerShell script ([`installer/Install.ps1`](installer/Install.ps1)), so you can read it before running it. Windows may warn that the files came from the internet; that's expected for an unsigned script.
+
+### Or build from source
 
 The repo holds readable source. SOLIDWORKS runs a binary `.swp`, which you build once:
 
@@ -86,7 +97,7 @@ The repo holds readable source. SOLIDWORKS runs a binary `.swp`, which you build
 - blank title-block fields;
 - a misspelled note.
 
-Build it into a `.swp` in the `demo` folder the same way as above and run it. Then run the review macro on the drawing it leaves open. The screenshot above is that review.
+The installer puts it in `demo\BuildDemoDrawing.swp` in the install folder. If you build from source, build it into a `.swp` in the `demo` folder the same way as above. Run it, then run the review macro on the drawing it leaves open. The screenshot above is that review.
 
 It uses the [AutoDrawing](https://github.com/kilwizac/solidworks-automate-drawing) macro for the drawing layout when it's installed next to this repo (`..\automate-drawing\AutoDrawing.swp`). Otherwise it uses a simpler built-in layout.
 
@@ -186,6 +197,7 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 ## Development
 
 - `src/ClaudeReviewDrawing.bas` is the source of truth. If you edit inside the VBA editor, right-click the module, choose **Export File…**, and overwrite the `.bas` before committing.
+- Releases: rebuild both `.swp` files from their `.bas` (import, compile, save), add a CHANGELOG section, then run `powershell -ExecutionPolicy Bypass -File tools\make-release.ps1 -Version <x.y.z> -Upload`. The script refuses a `.swp` older than its source.
 - `run-review.ps1` must stay ASCII-only: Windows PowerShell 5.1 reads scripts without a BOM in the ANSI code page.
 - Rebuild a report page from an existing run without asking Claude again:
 
@@ -198,6 +210,8 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 ├── CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, LICENSE
 ├── review-instructions.md     ← what Claude checks (edit freely, no rebuild)
 ├── run-review.ps1             ← background review and report page
+├── installer/                 ← Install.cmd + Install.ps1 (shipped in the release zip)
+├── tools/make-release.ps1     ← builds the release zip and publishes it
 ├── src/
 │   └── ClaudeReviewDrawing.bas  ← the macro (import into a .swp)
 ├── demo/
