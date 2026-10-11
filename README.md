@@ -4,7 +4,10 @@
 
 Run the macro on an open drawing. A few minutes later a review opens in your browser: findings ranked Critical / Major / Minor, each one with a numbered balloon on the drawing where the problem is.
 
-![A review of the demo drawing: findings on the left, the drawing with a numbered balloon for each finding on the right](docs/review.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/review-dark.png">
+  <img alt="A review of the demo drawing: findings on the left, the drawing with a numbered balloon for each finding on the right" src="docs/review-light.png">
+</picture>
 
 Built for **SOLIDWORKS 2025** on **Windows**. Uses **Claude Code** (the default mode) or **Claude Desktop**.
 
@@ -88,6 +91,7 @@ It uses the [AutoDrawing](https://github.com/kilwizac/solidworks-automate-drawin
   - Click a finding and the drawing zooms to its balloon. Click a balloon and the list jumps to that finding.
   - Findings that aren't about one spot (e.g. missing general notes) get a dashed balloon in the list and none on the sheet.
 - **Looks good** and **Questions** follow the findings. The page prints cleanly.
+- **Light or dark:** the page follows your Windows setting. The **Dark** / **Light** button in the header switches it, and the choice is remembered. Adding `?theme=light` or `?theme=dark` to the page's address forces one, e.g. for screenshots.
 
 Claude places each balloon from a `Pin` column in its findings (x,y as percent of the sheet). Where it can, it uses the sheet positions the macro records for every view, dimension and note.
 
@@ -193,7 +197,7 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 ├── demo/
 │   └── BuildDemoDrawing.bas     ← builds a demo part and drawing to try it on
 └── docs/
-    └── review.png
+    └── review-light.png, review-dark.png
 ```
 
 ## License

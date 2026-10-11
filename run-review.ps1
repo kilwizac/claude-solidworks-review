@@ -487,6 +487,7 @@ function Write-ReviewHtml {
     }
     $bodyClass = ''; if (-not $pdf) { $bodyClass = 'no-drawing' }
     $toggleBtn = ''; if ($pdf) { $toggleBtn = "<button class=`"hbtn`" id=`"toggle-drawing`" type=`"button`">Hide drawing</button>" }
+    $toggleBtn = "<button class=`"hbtn`" id=`"toggle-theme`" type=`"button`" title=`"Switch between light and dark`">Dark</button>" + $toggleBtn
 
     $head = @"
 <!doctype html>
@@ -495,6 +496,13 @@ function Write-ReviewHtml {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Drawing review: $(& $enc $name)</title>
+<script>
+(function () {
+  var t = null;
+  try { t = new URLSearchParams(location.search).get('theme') || localStorage.getItem('drawing-review:theme'); } catch (e) {}
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+})();
+</script>
 "@
 
     $css = @'
@@ -507,13 +515,22 @@ function Write-ReviewHtml {
     --sheet-shadow: 0 1px 2px rgba(0, 0, 0, .06), 0 10px 30px rgba(0, 0, 0, .08);
   }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
       --bg: #181817; --fg: #e9e7e2; --muted: #a8a59e; --faint: #706d68; --line: #2c2b29;
       --hover: #1f1f1d; --sel: #252422; --stage: #0f0f0e; --paper: #ffffff;
       --crit: #ef8a82; --major: #dba35a; --minor: #93b0dc; --info: #a8a59e; --good: #86c39b;
       --sheet-shadow: 0 0 0 1px rgba(255, 255, 255, .04), 0 10px 30px rgba(0, 0, 0, .5);
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #181817; --fg: #e9e7e2; --muted: #a8a59e; --faint: #706d68; --line: #2c2b29;
+    --hover: #1f1f1d; --sel: #252422; --stage: #0f0f0e; --paper: #ffffff;
+    --crit: #ef8a82; --major: #dba35a; --minor: #93b0dc; --info: #a8a59e; --good: #86c39b;
+    --sheet-shadow: 0 0 0 1px rgba(255, 255, 255, .04), 0 10px 30px rgba(0, 0, 0, .5);
+  }
+  :root[data-theme="light"] { color-scheme: light; }
   * { box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; }
   body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--fg);
@@ -844,6 +861,29 @@ function Write-ReviewHtml {
   pins.forEach(function (p) {
     p.addEventListener('click', function (e) { e.stopPropagation(); select(p.getAttribute('data-id'), 'pin'); });
   });
+
+  /* ---- Light / dark ---- */
+  var themeBtn = document.getElementById('toggle-theme');
+  var root = document.documentElement;
+  function currentTheme() {
+    var t = root.getAttribute('data-theme');
+    if (t) return t;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  function labelTheme() { if (themeBtn) themeBtn.textContent = currentTheme() === 'dark' ? 'Light' : 'Dark'; }
+  if (themeBtn) {
+    labelTheme();
+    themeBtn.addEventListener('click', function () {
+      var next = currentTheme() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      store.set('drawing-review:theme', next);
+      labelTheme();
+    });
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mq.addEventListener) mq.addEventListener('change', labelTheme);
+    }
+  }
 
   /* ---- Hide / show the drawing ---- */
   var toggle = document.getElementById('toggle-drawing');
