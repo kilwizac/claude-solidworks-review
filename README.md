@@ -108,6 +108,7 @@ It uses the [AutoDrawing](https://github.com/kilwizac/solidworks-automate-drawin
   - Click a finding and the drawing zooms to its balloon. Click a balloon and the list jumps to that finding.
   - Findings that aren't about one spot (e.g. missing general notes) get a dashed balloon in the list and none on the sheet.
 - **Looks good** and **Questions** follow the findings. The page prints cleanly.
+- **Link to a finding:** clicking one puts `#finding-N` in the address. Copy it, and the page opens with that finding selected and zoomed.
 - **Light or dark:** the page follows your Windows setting. The **Dark** / **Light** button in the header switches it, and the choice is remembered. Adding `?theme=light` or `?theme=dark` to the page's address forces one, e.g. for screenshots.
 
 Claude places each balloon from a `Pin` column in its findings (x,y as percent of the sheet). Where it can, it uses the sheet positions the macro records for every view, dimension and note.

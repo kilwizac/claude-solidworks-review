@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Clicking a finding puts `#finding-N` in the address, and a link with it opens the report on that finding.
+- The drawing keeps its zoom when the window is resized, and balloons hold their size while it animates.
+
 ## 0.2.0 - 2026-10-10
 
 ### Added

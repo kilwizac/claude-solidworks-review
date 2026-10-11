@@ -639,7 +639,7 @@ function Write-ReviewHtml {
   .viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
   .viewport.dragging { cursor: grabbing; }
   .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; --inv: 1; }
-  .stage.anim { transition: transform .28s cubic-bezier(.2, .7, .2, 1); }
+  .stage.anim, .stage.anim .pin { transition: transform .28s cubic-bezier(.2, .7, .2, 1); }
   .stage img { display: block; max-width: none; user-select: none; background: var(--paper);
                box-shadow: var(--sheet-shadow); }
   .pin { --c: #66645f; position: absolute; width: 24px; height: 24px; margin: 0; padding: 0; border-radius: 50%;
@@ -654,6 +654,7 @@ function Write-ReviewHtml {
   .pin.selected { background: var(--c); color: #fff; box-shadow: 0 0 0 5px rgba(0, 0, 0, .1), 0 1px 3px rgba(0, 0, 0, .25); z-index: 2; }
   .pin.is-fixed { opacity: .35; }
   .pin.hidden, .viewer.no-pins .pin { display: none; }
+  .viewer.instant .pin { transition: none; }
   .controls { position: absolute; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 2px;
               padding: 4px; border-radius: 9px; background: var(--bg); border: 1px solid var(--line);
               box-shadow: 0 4px 16px rgba(0, 0, 0, .08); font-size: 12.5px; }
@@ -752,7 +753,9 @@ function Write-ReviewHtml {
   var viewer = document.getElementById('viewer');
   var vp = document.getElementById('viewport');
   var zoomLabel = document.getElementById('zoom');
-  var st = { s: 1, tx: 0, ty: 0, fit: 1 };
+  // atFit: still showing the whole sheet, so a window resize refits it.
+  // Once zoomed or panned, a resize leaves the view alone.
+  var st = { s: 1, tx: 0, ty: 0, fit: 1, atFit: true };
   var cur = vp ? vp.querySelector('.stage:not([hidden])') : null;
 
   function img() { return cur.querySelector('img'); }
@@ -769,11 +772,13 @@ function Write-ReviewHtml {
     if (!r.width || !r.height) return;
     st.fit = st.s = Math.min((r.width - 2 * pad) / w, (r.height - 2 * pad) / h);
     st.tx = (r.width - w * st.s) / 2; st.ty = (r.height - h * st.s) / 2;
+    st.atFit = true;
     apply(anim);
   }
   function zoomAt(f, cx, cy, anim) {
     var s2 = Math.min(st.fit * 10, Math.max(st.fit * 0.5, st.s * f));
     st.tx = cx - (cx - st.tx) * (s2 / st.s); st.ty = cy - (cy - st.ty) * (s2 / st.s); st.s = s2;
+    st.atFit = false;
     apply(anim);
   }
   function whenLoaded(fn) {
@@ -789,20 +794,21 @@ function Write-ReviewHtml {
     });
     whenLoaded(function () { fit(); });
   }
-  function focusPin(pin) {
+  function focusPin(pin, anim) {
     showSheet(pin.parentNode.getAttribute('data-sheet'));
     whenLoaded(function () {
       var r = vp.getBoundingClientRect(), w = img().naturalWidth, h = img().naturalHeight;
       var px = parseFloat(pin.style.left) / 100 * w, py = parseFloat(pin.style.top) / 100 * h;
       st.s = Math.max(st.s, st.fit * 2.4);
       st.tx = r.width / 2 - px * st.s; st.ty = r.height / 2 - py * st.s;
-      apply(true);
+      st.atFit = false;
+      apply(anim);
     });
   }
 
   if (vp && cur) {
     whenLoaded(function () { fit(); });
-    window.addEventListener('resize', function () { fit(); });
+    window.addEventListener('resize', function () { if (st.atFit) fit(); });
     vp.addEventListener('wheel', function (e) {
       e.preventDefault();
       var r = vp.getBoundingClientRect();
@@ -816,7 +822,7 @@ function Write-ReviewHtml {
     });
     vp.addEventListener('pointermove', function (e) {
       if (!drag) return;
-      st.tx = drag.tx + e.clientX - drag.x; st.ty = drag.ty + e.clientY - drag.y; apply(false);
+      st.tx = drag.tx + e.clientX - drag.x; st.ty = drag.ty + e.clientY - drag.y; st.atFit = false; apply(false);
     });
     function endDrag() { drag = null; vp.classList.remove('dragging'); }
     vp.addEventListener('pointerup', endDrag); vp.addEventListener('pointercancel', endDrag);
@@ -846,8 +852,11 @@ function Write-ReviewHtml {
     items.forEach(function (i) { i.classList.toggle('selected', i.getAttribute('data-id') === id); });
     pins.forEach(function (p) { p.classList.toggle('selected', p.getAttribute('data-id') === id); });
     var pin = pinFor(id), item = itemFor(id);
-    if (from === 'list' && pin && vp && !document.body.classList.contains('no-drawing')) focusPin(pin);
-    if (from === 'pin' && item) item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    // Opened from a link: jump straight there, nothing to animate from.
+    if (from !== 'pin' && pin && vp && !document.body.classList.contains('no-drawing')) focusPin(pin, from !== 'link');
+    if (from !== 'list' && item) item.scrollIntoView({ block: from === 'link' ? 'center' : 'nearest', behavior: 'smooth' });
+    // #finding-N in the address: a link that opens this finding.
+    try { history.replaceState(null, '', '#finding-' + encodeURIComponent(id)); } catch (e) {}
   }
   items.forEach(function (item) {
     var id = item.getAttribute('data-id');
@@ -861,6 +870,15 @@ function Write-ReviewHtml {
   pins.forEach(function (p) {
     p.addEventListener('click', function (e) { e.stopPropagation(); select(p.getAttribute('data-id'), 'pin'); });
   });
+
+  /* ---- #finding-N in the address opens that finding ---- */
+  var linked = /^#finding-(.+)$/.exec(location.hash);
+  if (linked && itemFor(decodeURIComponent(linked[1]))) {
+    // Opened from a link: show the finding as-is, without fades.
+    if (viewer) viewer.classList.add('instant');
+    setTimeout(function () { select(decodeURIComponent(linked[1]), 'link'); }, 150);
+    setTimeout(function () { if (viewer) viewer.classList.remove('instant'); }, 1500);
+  }
 
   /* ---- Light / dark ---- */
   var themeBtn = document.getElementById('toggle-theme');
