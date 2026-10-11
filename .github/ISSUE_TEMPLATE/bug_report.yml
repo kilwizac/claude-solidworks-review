@@ -1,0 +1,56 @@
+name: Bug report
+description: Something went wrong running the macro or the review.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Don't attach drawings, PDFs or `drawing-data.md` from confidential work.** Describe the drawing instead, or reproduce the problem on the demo drawing (`demo/BuildDemoDrawing.bas`).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Include the exact text of any popup.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: LAUNCH_MODE
+      options:
+        - 2 - background report (default)
+        - 0 - Claude Desktop Code tab
+        - 1 - Cowork
+        - 3 - chat + clipboard
+        - 4 - folder only
+    validations:
+      required: true
+  - type: input
+    id: solidworks
+    attributes:
+      label: SOLIDWORKS version and service pack
+      placeholder: e.g. SOLIDWORKS 2025 SP5.0
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code / Claude Desktop version
+      placeholder: e.g. claude --version -> 2.1.296
+  - type: dropdown
+    id: drawing
+    attributes:
+      label: Kind of drawing
+      multiple: true
+      options:
+        - Part drawing
+        - Assembly drawing with BOM
+        - Multi-sheet
+        - Uses GD&T
+        - Not saved yet
+  - type: textarea
+    id: log
+    attributes:
+      label: claude-log.txt / Export notes
+      description: In background mode, the contents of claude-log.txt from the run folder. If the review ran, the "Export notes" section at the end of drawing-data.md.
+      render: text

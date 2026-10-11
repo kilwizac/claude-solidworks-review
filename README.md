@@ -1,5 +1,11 @@
 # Review with Claude
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![SOLIDWORKS 2025](https://img.shields.io/badge/SOLIDWORKS-2025-c8102e.svg)](#requirements)
+[![Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)](#requirements)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-CLI-d97757.svg)](https://docs.claude.com/en/docs/claude-code/setup)
+[![Release](https://img.shields.io/github/v/release/kilwizac/claude-solidworks-review)](https://github.com/kilwizac/claude-solidworks-review/releases)
+
 **A one-click drafting review for SOLIDWORKS drawings, done by Claude.**
 
 Run the macro on an open drawing. A few minutes later a review opens in your browser: findings ranked Critical / Major / Minor, each one with a numbered balloon on the drawing where the problem is.
@@ -189,7 +195,7 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 
 ```
 ├── README.md
-├── LICENSE
+├── CHANGELOG.md, CONTRIBUTING.md, SECURITY.md, LICENSE
 ├── review-instructions.md     ← what Claude checks (edit freely, no rebuild)
 ├── run-review.ps1             ← background review and report page
 ├── src/
@@ -200,6 +206,10 @@ Claude's answer is written to `review.md` by the script, not by Claude.
     └── review-light.png, review-dark.png
 ```
 
+## Contributing
+
+Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security or privacy problems privately, as described in [SECURITY.md](SECURITY.md).
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Not affiliated with Dassault Systèmes or Anthropic. SOLIDWORKS is a trademark of Dassault Systèmes; Claude is a trademark of Anthropic.

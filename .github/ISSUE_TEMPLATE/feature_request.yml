@@ -1,0 +1,15 @@
+name: Feature or checklist idea
+description: Suggest something the macro, the report or the review checklist should do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: The problem it solves and how you'd like it to work. For checklist ideas, the drafting rule and the standard it comes from (e.g. ASME Y14.5) help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered
