@@ -1,0 +1,13 @@
+# SolidWorks macro binaries (built locally by importing src/*.bas in the VBA IDE)
+*.swp
+*.swb
+
+# SolidWorks lock/temp files
+~$*
+*.~lock*
+
+# Test artifacts
+*.SLDDRW
+*.SLDPRT
+*.SLDASM
+*.pdf
