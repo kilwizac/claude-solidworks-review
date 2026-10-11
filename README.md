@@ -4,9 +4,7 @@
 
 Run the macro on an open drawing. A few minutes later a review opens in your browser: findings ranked Critical / Major / Minor, each one with a numbered balloon on the drawing where the problem is.
 
-<!-- Screenshot: add docs/review.png and uncomment.
-![A review: findings on the left, the drawing with numbered balloons on the right](docs/review.png)
--->
+![A review of the demo drawing: findings on the left, the drawing with a numbered balloon for each finding on the right](docs/review.png)
 
 Built for **SOLIDWORKS 2025** on **Windows**. Uses **Claude Code** (the default mode) or **Claude Desktop**.
 
@@ -69,6 +67,19 @@ The repo holds readable source. SOLIDWORKS runs a binary `.swp`, which you build
 1. Open a drawing. It doesn't need to be saved; the review covers what's on screen.
 2. Run the macro.
 3. Keep working. `review.html` opens in your browser when Claude is done, usually within a few minutes.
+
+### Try it on a demo drawing
+
+[`demo/BuildDemoDrawing.bas`](demo/BuildDemoDrawing.bas) is a macro that builds **DEMO-100**, a small mounting plate, and its drawing, with mistakes planted for the review to find:
+- an overridden dimension (4.00 shows as 4.10);
+- holes without locations;
+- a hole callout with no 4X or THRU;
+- blank title-block fields;
+- a misspelled note.
+
+Build it into a `.swp` in the `demo` folder the same way as above and run it. Then run the review macro on the drawing it leaves open. The screenshot above is that review.
+
+It uses the [AutoDrawing](https://github.com/kilwizac/solidworks-automate-drawing) macro for the drawing layout when it's installed next to this repo (`..\automate-drawing\AutoDrawing.swp`). Otherwise it uses a simpler built-in layout.
 
 ## The report
 
@@ -177,8 +188,12 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 ├── LICENSE
 ├── review-instructions.md     ← what Claude checks (edit freely, no rebuild)
 ├── run-review.ps1             ← background review and report page
-└── src/
-    └── ClaudeReviewDrawing.bas  ← the macro (import into a .swp)
+├── src/
+│   └── ClaudeReviewDrawing.bas  ← the macro (import into a .swp)
+├── demo/
+│   └── BuildDemoDrawing.bas     ← builds a demo part and drawing to try it on
+└── docs/
+    └── review.png
 ```
 
 ## License
