@@ -27,7 +27,11 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $app = Join-Path $here 'app'
-$defaultDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'SOLIDWORKS Macros\Claude Review'
+# GetFolderPath gives "" when Documents doesn't exist (e.g. a broken
+# folder redirection).
+$documents = [Environment]::GetFolderPath('MyDocuments')
+if (-not $documents) { $documents = Join-Path $env:USERPROFILE 'Documents' }
+$defaultDir = Join-Path $documents 'SOLIDWORKS Macros\Claude Review'
 $results = New-Object System.Collections.Generic.List[object]
 
 function Add-Result([string]$item, [string]$status, [string]$detail) {
