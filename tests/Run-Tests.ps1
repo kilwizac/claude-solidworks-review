@@ -39,13 +39,17 @@ param(
 $ErrorActionPreference = 'Stop'
 $tests = $PSScriptRoot
 $repo = Split-Path -Parent $tests
+# powershell -File passes "-Path a,b" as one string.
+if ($Path.Count -eq 1 -and $Path[0] -match ',') { $Path = $Path[0] -split ',' }
 
 # The scripts under test run in Windows PowerShell 5.1 (the macro starts
 # powershell.exe), so the tests do too. Started from PowerShell 7, it
 # inherits 7's module folders first and loads the wrong modules
 # (Get-FileHash goes missing), so it gets its own.
+$documents = [Environment]::GetFolderPath('MyDocuments')
+if (-not $documents) { $documents = Join-Path $env:USERPROFILE 'Documents' }
 $winModules = @(
-    (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'),
+    (Join-Path $documents 'WindowsPowerShell\Modules'),
     (Join-Path $env:ProgramFiles 'WindowsPowerShell\Modules'),
     (Join-Path $env:SystemRoot 'system32\WindowsPowerShell\v1.0\Modules')
 ) -join ';'
@@ -58,7 +62,6 @@ if ($PSVersionTable.PSEdition -eq 'Core' -or ($env:PSModulePath -match '\\PowerS
     & powershell.exe @argList
     exit $LASTEXITCODE
 }
-if ($Path.Count -eq 1 -and $Path[0] -match ',') { $Path = $Path[0] -split ',' }
 if ($UpdateFixtures) { $env:CRD_UPDATE_FIXTURES = '1' }
 
 # ---------------------------------------------------------------------

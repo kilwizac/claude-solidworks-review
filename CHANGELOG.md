@@ -31,6 +31,7 @@
 - `-RenderOnly` with a relative folder keeps its balloons. A failed sheet render no longer leaves images for the next run to reuse, and its log line gives the real error.
 - Report page: a malformed `#finding-` address no longer breaks the header buttons, a link to a finding on sheet 2 isn't undone when sheet 1 loads, a click that wobbles a pixel no longer counts as a pan, and balloon colour fades keep working after an animated zoom.
 - Installer:
+  - no longer stops at the start when the Documents folder doesn't exist (e.g. a broken folder redirection);
   - unblocks only the files it installs, not everything in the chosen folder;
   - replaces a `review-instructions.md` you never edited with the new default (only a customised one is kept), and always saves the default beside it as `review-instructions.default.md`;
   - Install.cmd explains when Group Policy blocks PowerShell scripts (the old check inside Install.ps1 could never run);
