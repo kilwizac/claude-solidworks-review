@@ -97,6 +97,7 @@ $env:FAKE_CLAUDE_REVIEW = $cfg.Review
 
         # Run folders: old ones to clean up, and a list to remove after.
         $script:RunRoot = Join-Path ([IO.Path]::GetTempPath()) 'ClaudeDrawingReview'
+        $script:RunRootExisted = Test-Path -LiteralPath $RunRoot
         New-Item -ItemType Directory -Force -Path $RunRoot | Out-Null
         $script:Before = @(Get-ChildItem -LiteralPath $RunRoot -Directory | ForEach-Object FullName)
         $old = (Get-Date).AddDays(-30)
@@ -176,6 +177,10 @@ $env:FAKE_CLAUDE_REVIEW = $cfg.Review
         if (-not $env:CRD_KEEP_E2E -and $RunRoot) {
             foreach ($d in Get-ChildItem -LiteralPath $RunRoot -Directory -ErrorAction SilentlyContinue) {
                 if ($Before -notcontains $d.FullName -and $d.Name -like 'DEMO-100_*') { Remove-Item -LiteralPath $d.FullName -Recurse -Force -ErrorAction SilentlyContinue }
+            }
+            # Leave no empty run root behind where there was none.
+            if (-not $RunRootExisted -and -not (Get-ChildItem -LiteralPath $RunRoot -Force -ErrorAction SilentlyContinue)) {
+                Remove-Item -LiteralPath $RunRoot -Force -ErrorAction SilentlyContinue
             }
         }
     }
