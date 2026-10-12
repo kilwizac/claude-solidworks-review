@@ -14,3 +14,13 @@
 
 # Release builds (tools/make-release.ps1)
 dist/
+
+# Tests (tests/Run-Tests.ps1)
+tests/.out/
+tests/.tools/
+tests/browser/node_modules/
+tests/browser/test-results/
+tests/browser/playwright-report/
+.playwright-mcp/
+# The demo drawing's PDF is a test fixture.
+!tests/fixtures/**/*.pdf

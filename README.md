@@ -5,6 +5,7 @@
 [![Windows](https://img.shields.io/badge/platform-Windows-0078d4.svg)](#requirements)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-CLI-d97757.svg)](https://docs.claude.com/en/docs/claude-code/setup)
 [![Release](https://img.shields.io/github/v/release/kilwizac/claude-solidworks-review)](https://github.com/kilwizac/claude-solidworks-review/releases)
+[![Tests](https://github.com/kilwizac/claude-solidworks-review/actions/workflows/tests.yml/badge.svg)](https://github.com/kilwizac/claude-solidworks-review/actions/workflows/tests.yml)
 
 **A one-click drafting review for SOLIDWORKS drawings, done by Claude.**
 
