@@ -3,11 +3,13 @@
   release zip (run it through Install.cmd).
 
   1. Checks for SOLIDWORKS 2025+, the Claude Code CLI (offers to install
-     it with Anthropic's official installer and to sign in), Claude
-     Desktop (optional) and whether PowerShell scripts are allowed.
+     it with Anthropic's official installer and to sign in) and Claude
+     Desktop (optional). Install.cmd has already checked that Group
+     Policy allows PowerShell scripts.
   2. Removes the "downloaded from the internet" flag from the files.
   3. Copies the macros and scripts to a folder you choose. A customised
-     review-instructions.md is kept; the new default is saved beside it.
+     review-instructions.md is kept; the default checklist is always
+     saved beside it as review-instructions.default.md.
 
   -InstallDir <folder>  install there without asking
   -Quiet                no questions: default folder, don't install or
@@ -134,17 +136,7 @@ if ($desktop) { Add-Result 'Claude Desktop' 'OK' 'Installed (optional; used by L
 else { Add-Result 'Claude Desktop' 'INFO' 'Not installed (optional; only needed for LAUNCH_MODE 0, 1 and 3)' }
 
 # ---------------------------------------------------------------------
-# 5. PowerShell scripts allowed? (Group Policy beats -ExecutionPolicy Bypass)
-# ---------------------------------------------------------------------
-$policy = Get-ExecutionPolicy -List | Where-Object { $_.Scope -in 'MachinePolicy', 'UserPolicy' -and $_.ExecutionPolicy -ne 'Undefined' } | Select-Object -First 1
-if ($policy -and $policy.ExecutionPolicy -in 'Restricted', 'AllSigned') {
-    Add-Result 'PowerShell scripts' 'WARN' ("Group Policy sets $($policy.ExecutionPolicy): background reviews may be blocked. Use LAUNCH_MODE 0 or 1 instead.")
-} else {
-    Add-Result 'PowerShell scripts' 'OK' 'Allowed for the review script'
-}
-
-# ---------------------------------------------------------------------
-# 6. Install folder
+# 5. Install folder
 # ---------------------------------------------------------------------
 Write-Step 'Choosing the install folder'
 if (-not $InstallDir) {
@@ -164,11 +156,17 @@ if (-not $InstallDir) {
     }
 }
 $InstallDir = [IO.Path]::GetFullPath($InstallDir)
+# Installing over a clone of the repo would overwrite its working files.
+if (Test-Path -LiteralPath (Join-Path $InstallDir 'src\ClaudeReviewDrawing.bas')) {
+    Write-Host ''
+    Write-Host "$InstallDir is a copy of the source repository; install somewhere else." -ForegroundColor Red
+    exit 1
+}
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $InstallDir 'demo') | Out-Null
 
 # ---------------------------------------------------------------------
-# 7. Copy
+# 6. Copy
 # ---------------------------------------------------------------------
 Write-Step "Installing to $InstallDir"
 function Test-Locked([string]$path) {
@@ -182,6 +180,7 @@ $copies = @(
     @{ From = 'LICENSE'; To = 'LICENSE' },
     @{ From = 'demo\BuildDemoDrawing.swp'; To = 'demo\BuildDemoDrawing.swp' }
 )
+$installed = New-Object System.Collections.Generic.List[string]
 foreach ($c in $copies) {
     $src = Join-Path $app $c.From
     $dst = Join-Path $InstallDir $c.To
@@ -192,20 +191,37 @@ foreach ($c in $copies) {
         Read-Host 'Close the macro (or SOLIDWORKS), then press Enter to retry'
     }
     Copy-Item -LiteralPath $src -Destination $dst -Force
+    $installed.Add($dst)
 }
 
-# Keep a customised checklist; ship the new default beside it.
+# The checklist is replaced unless it was customised. It counts as stock
+# if it matches the default an earlier install saved beside it, or a
+# release that saved none.
+function Get-TextHash([string]$path) {
+    # Line endings and a BOM aren't edits.
+    $text = ([IO.File]::ReadAllText($path) -replace "`r`n", "`n").Trim()
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($text)) } finally { $sha.Dispose() }
+    return [BitConverter]::ToString($bytes).Replace('-', '')
+}
 $newInstr = Join-Path $app 'review-instructions.md'
 $curInstr = Join-Path $InstallDir 'review-instructions.md'
-if ((Test-Path -LiteralPath $curInstr) -and
-    ((Get-FileHash -LiteralPath $curInstr).Hash -ne (Get-FileHash -LiteralPath $newInstr).Hash)) {
-    Copy-Item -LiteralPath $newInstr -Destination (Join-Path $InstallDir 'review-instructions.default.md') -Force
-    Add-Result 'Review checklist' 'INFO' 'Kept your review-instructions.md; the new default is review-instructions.default.md'
-} else {
+$defInstr = Join-Path $InstallDir 'review-instructions.default.md'
+$stock = @(
+    '397285AAA4C232DD0E8D18309F0F0BA78E3EBB55C4E7D1A2ED27891C83750FF3'  # 0.1.0 and 0.2.0
+    (Get-TextHash $newInstr)
+)
+if (Test-Path -LiteralPath $defInstr) { $stock += Get-TextHash $defInstr }
+if (-not (Test-Path -LiteralPath $curInstr) -or ((Get-TextHash $curInstr) -in $stock)) {
     Copy-Item -LiteralPath $newInstr -Destination $curInstr -Force
     Add-Result 'Review checklist' 'OK' 'review-instructions.md installed'
+} else {
+    Add-Result 'Review checklist' 'INFO' 'Kept your customised review-instructions.md; the new default is review-instructions.default.md'
 }
-Get-ChildItem -LiteralPath $InstallDir -Recurse -File | Unblock-File
+Copy-Item -LiteralPath $newInstr -Destination $defInstr -Force
+$installed.Add($curInstr); $installed.Add($defInstr)
+# Only the installed files: the folder may hold other downloads.
+Unblock-File -LiteralPath $installed
 Add-Result 'Macros' 'OK' "Installed to $InstallDir"
 
 # ---------------------------------------------------------------------

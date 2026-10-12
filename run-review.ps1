@@ -12,7 +12,8 @@
 
   -RenderOnly rebuilds review.html from an existing review.md without
   asking Claude again (e.g. after editing the page below). -NoOpen skips
-  opening the page.
+  opening the page. -TimeoutMinutes (default 30) stops a review that
+  hangs.
 
   Follow-up questions: open a terminal in the run folder and run
   `claude --continue`.
@@ -26,15 +27,21 @@
 param(
     [Parameter(Mandatory = $true)][string]$Folder,
     [switch]$RenderOnly,
-    [switch]$NoOpen
+    [switch]$NoOpen,
+    [int]$TimeoutMinutes = 30
 )
 
 $ErrorActionPreference = 'Stop'
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $inv = [Globalization.CultureInfo]::InvariantCulture
 
+# Full path: .NET calls resolve relative paths against the process's
+# directory, not PowerShell's, and the PDF renderer refuses them.
+$Folder = Convert-Path -LiteralPath $Folder
+
 $promptPath = Join-Path $Folder 'prompt.txt'
 $stdinPath  = Join-Path $Folder 'prompt-stdin.txt'
+$outPath    = Join-Path $Folder 'claude-output.txt'
 $reviewPath = Join-Path $Folder 'review.md'
 $htmlPath   = Join-Path $Folder 'review.html'
 $logPath    = Join-Path $Folder 'claude-log.txt'
@@ -67,21 +74,39 @@ function Invoke-ClaudeReview {
     [IO.File]::WriteAllText($stdinPath, $prompt, $utf8)
 
     # The prompt goes in on stdin and the answer comes out on stdout,
-    # file to file, so PowerShell never re-encodes either.
+    # file to file, so PowerShell never re-encodes either. The answer only
+    # becomes review.md if Claude finishes: when it fails, the CLI prints
+    # the error there (e.g. "Invalid API key"), and that's no review.
     $proc = Start-Process -FilePath $claude `
         -ArgumentList '-p', '--restricted', '--strict-mcp-config', '--tools', 'Read', '--allowedTools', 'Read' `
         -WorkingDirectory $Folder `
         -RedirectStandardInput $stdinPath `
-        -RedirectStandardOutput $reviewPath `
+        -RedirectStandardOutput $outPath `
         -RedirectStandardError $logPath `
-        -NoNewWindow -Wait -PassThru
+        -NoNewWindow -PassThru
+    # Hold the handle now; without it ExitCode reads empty after the wait.
+    $null = $proc.Handle
+    if (-not $proc.WaitForExit($TimeoutMinutes * 60000)) {
+        # /T: anything Claude Code started goes too.
+        try { & taskkill.exe /PID $proc.Id /T /F *> $null } catch { }
+        try { if (-not $proc.HasExited) { $proc.Kill() } } catch { }
+        throw "Claude Code hadn't finished after $TimeoutMinutes min, so it was stopped. Details are in claude-log.txt."
+    }
 
-    if ($proc.ExitCode -ne 0) {
-        throw "Claude Code exited with code $($proc.ExitCode). Details are in claude-log.txt."
+    $answer = ''
+    if (Test-Path -LiteralPath $outPath) { $answer = [IO.File]::ReadAllText($outPath).Trim() }
+    if ($proc.ExitCode -ne 0 -or -not $answer) {
+        $msg = "Claude Code exited with code $($proc.ExitCode)."
+        if ($proc.ExitCode -eq 0) { $msg = 'Claude Code returned an empty review.' }
+        if ($answer) {
+            Write-Log ("Claude Code's output:`r`n" + $answer)
+            $first = ($answer -split "`r?`n")[0].Trim()
+            if ($first.Length -gt 300) { $first = $first.Substring(0, 300) + '...' }
+            $msg += "`n`n" + $first
+        }
+        throw "$msg`n`nDetails are in claude-log.txt."
     }
-    if (-not (Test-Path -LiteralPath $reviewPath) -or (Get-Item -LiteralPath $reviewPath).Length -eq 0) {
-        throw "Claude Code returned an empty review. Details are in claude-log.txt."
-    }
+    Move-Item -LiteralPath $outPath -Destination $reviewPath -Force
     Remove-Item -LiteralPath $stdinPath -ErrorAction SilentlyContinue
 }
 
@@ -126,16 +151,24 @@ function Export-SheetImages([string]$pdfPath) {
             $name = "sheet-$($i + 1).png"
             $out = & $await ($dir.CreateFileAsync($name, [Windows.Storage.CreationCollisionOption]::ReplaceExisting)) ([Windows.Storage.StorageFile])
             $stream = & $await ($out.OpenAsync([Windows.Storage.FileAccessMode]::ReadWrite)) ([Windows.Storage.Streams.IRandomAccessStream])
-            $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
-            $opts.DestinationWidth = [uint32]2400
-            & $awaitAction ($page.RenderToStreamAsync($stream, $opts))
-            $stream.Dispose()
-            $page.Dispose()
+            try {
+                $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
+                $opts.DestinationWidth = [uint32]2400
+                & $awaitAction ($page.RenderToStreamAsync($stream, $opts))
+            } finally {
+                $stream.Dispose()
+                $page.Dispose()
+            }
             $names.Add($name)
         }
     }
     catch {
-        Write-Log ('Sheet images could not be made; showing the PDF without balloons. ' + $_.Exception.Message)
+        # The WinRT error sits under the reflection and task wrappers.
+        $e = $_.Exception
+        while ($e.InnerException) { $e = $e.InnerException }
+        Write-Log ('Sheet images could not be made; showing the PDF without balloons. ' + $e.Message)
+        # A partial set would be reused by the next -RenderOnly.
+        try { Get-ChildItem -LiteralPath $Folder -Filter 'sheet-*.png' | Remove-Item -Force -ErrorAction SilentlyContinue } catch { }
         $names.Clear()
     }
     return ,$names
@@ -303,7 +336,7 @@ function Get-ReviewParts([string[]]$lines) {
             if (-not $num) { $num = [string]($findings.Count + 1) }
             $sheetText = & $get 'sheet'
             $sheetNo = 1
-            $sm = [regex]::Match($sheetText, '^\W*(?:sheet\s*)?(\d+)\b')
+            $sm = [regex]::Match($sheetText, '(?i)^\W*(?:sheet\s*)?(\d+)\b')
             if ($sm.Success) { $sheetNo = [int]$sm.Groups[1].Value }
             $findings.Add([pscustomobject]@{
                 Num     = $num
@@ -322,6 +355,24 @@ function Get-ReviewParts([string[]]$lines) {
         return [pscustomobject]@{ Pre = $pre; Findings = $findings; Post = $post }
     }
     return $null
+}
+
+# Drops the "Verdict: ..." line, which the page shows as the verdict
+# above the summary. A summary written on the same line stays.
+function Remove-VerdictLine([string[]]$lines) {
+    $out = New-Object System.Collections.Generic.List[string]
+    $done = $false
+    foreach ($l in $lines) {
+        if (-not $done -and $l -match '^\W*verdict\b') {
+            $done = $true
+            $rest = $l -replace '^\W*verdict\b[\W_]*(?:ready to release|needs minor fixes|needs rework)?', ''
+            $rest = $rest -replace '^[\s*_.,:;\-\u2013\u2014]+', ''
+            if ($rest -match '\w') { $out.Add($rest) }
+            continue
+        }
+        $out.Add($l)
+    }
+    return ,$out.ToArray()
 }
 
 # =====================================================================
@@ -350,10 +401,8 @@ function Write-ReviewHtml {
     $restHtml = ''
 
     if ($parts) {
-        $summaryHtml = ConvertTo-Html-Blocks $parts.Pre
-        # The "Verdict: ..." line and a bold "Summary: ..." lead-in repeat
-        # the verdict shown above the summary.
-        $summaryHtml = [regex]::Replace($summaryHtml, '^\s*<p>(?:<strong>)?Verdict\b[^<]*(?:</strong>)?[^<]*</p>\s*', '')
+        $summaryHtml = ConvertTo-Html-Blocks (Remove-VerdictLine $parts.Pre)
+        # A bold "Summary:" lead-in repeats what the section is.
         $summaryHtml = [regex]::Replace($summaryHtml, '^\s*<p><strong>(?:Summary|Verdict)[^<]*</strong>\s*', '<p>')
         $restHtml = ConvertTo-Html-Blocks $parts.Post
 
@@ -366,7 +415,7 @@ function Write-ReviewHtml {
             $id = & $enc $f.Num
 
             $where = @()
-            if ($f.Sheet) {
+            if ($f.Sheet -match '\w') {
                 $st = $f.Sheet
                 if ($st -match '^\d+$') { $st = "Sheet $st" }
                 $where += ConvertTo-Html-Inline $st
@@ -639,7 +688,8 @@ function Write-ReviewHtml {
   .viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; touch-action: none; }
   .viewport.dragging { cursor: grabbing; }
   .stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; --inv: 1; }
-  .stage.anim, .stage.anim .pin { transition: transform .28s cubic-bezier(.2, .7, .2, 1); }
+  .stage.anim { transition: transform .28s cubic-bezier(.2, .7, .2, 1); }
+  .stage.anim .pin { transition: transform .28s cubic-bezier(.2, .7, .2, 1), background .12s, color .12s; }
   .stage img { display: block; max-width: none; user-select: none; background: var(--paper);
                box-shadow: var(--sheet-shadow); }
   .pin { --c: #66645f; position: absolute; width: 24px; height: 24px; margin: 0; padding: 0; border-radius: 50%;
@@ -807,7 +857,9 @@ function Write-ReviewHtml {
   }
 
   if (vp && cur) {
-    whenLoaded(function () { fit(); });
+    // Skipped if a link has already zoomed to a finding (maybe on
+    // another sheet) by the time this sheet loads.
+    whenLoaded(function () { if (st.atFit) fit(); });
     window.addEventListener('resize', function () { if (st.atFit) fit(); });
     vp.addEventListener('wheel', function (e) {
       e.preventDefault();
@@ -822,7 +874,11 @@ function Write-ReviewHtml {
     });
     vp.addEventListener('pointermove', function (e) {
       if (!drag) return;
-      st.tx = drag.tx + e.clientX - drag.x; st.ty = drag.ty + e.clientY - drag.y; st.atFit = false; apply(false);
+      var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      // A click that wobbles a pixel or two isn't a pan.
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      drag.moved = true;
+      st.tx = drag.tx + dx; st.ty = drag.ty + dy; st.atFit = false; apply(false);
     });
     function endDrag() { drag = null; vp.classList.remove('dragging'); }
     vp.addEventListener('pointerup', endDrag); vp.addEventListener('pointercancel', endDrag);
@@ -872,13 +928,23 @@ function Write-ReviewHtml {
   });
 
   /* ---- #finding-N in the address opens that finding ---- */
-  var linked = /^#finding-(.+)$/.exec(location.hash);
-  if (linked && itemFor(decodeURIComponent(linked[1]))) {
+  function linkedId() {
+    var m = /^#finding-(.+)$/.exec(location.hash);
+    if (!m) return null;
+    try { return decodeURIComponent(m[1]); } catch (e) { return null; }
+  }
+  var linked = linkedId();
+  if (linked && itemFor(linked)) {
     // Opened from a link: show the finding as-is, without fades.
     if (viewer) viewer.classList.add('instant');
-    setTimeout(function () { select(decodeURIComponent(linked[1]), 'link'); }, 150);
+    setTimeout(function () { select(linked, 'link'); }, 150);
     setTimeout(function () { if (viewer) viewer.classList.remove('instant'); }, 1500);
   }
+  // A link pasted into this tab changes only the hash.
+  window.addEventListener('hashchange', function () {
+    var id = linkedId();
+    if (id && itemFor(id)) select(id, 'link');
+  });
 
   /* ---- Light / dark ---- */
   var themeBtn = document.getElementById('toggle-theme');
@@ -909,7 +975,8 @@ function Write-ReviewHtml {
     document.body.classList.toggle('no-drawing', !show);
     if (toggle) toggle.textContent = show ? 'Hide drawing' : 'Show drawing';
     store.set('drawing-review:show-drawing', show ? '1' : '0');
-    if (show && cur) setTimeout(function () { fit(); }, 0);
+    // Like a resize: refit only if the view wasn't zoomed or panned.
+    if (show && cur && st.atFit) setTimeout(function () { fit(); }, 0);
   }
   if (toggle) {
     setDrawing(store.get('drawing-review:show-drawing') !== '0');

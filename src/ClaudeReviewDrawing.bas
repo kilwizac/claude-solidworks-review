@@ -112,6 +112,8 @@ Private mGtolXmlFrames As Long
 ' 0 when unknown (positions are then left out).
 Private mSheetW As Double
 Private mSheetH As Double
+' The drawing's layers, to leave out annotations on hidden layers.
+Private mLayerMgr As SldWorks.LayerMgr
 
 Public Sub Main()
     Dim stepName As String
@@ -590,6 +592,10 @@ Private Function BuildDrawingData(swModel As SldWorks.ModelDoc2, _
     Dim vSheets As Variant, vNames As Variant, i As Long
 
     ReadUnits swModel
+    Set mLayerMgr = Nothing
+    On Error Resume Next
+    Set mLayerMgr = swModel.GetLayerManager
+    On Error GoTo 0
     propsOut = "### Drawing" & vbCrLf & PropTable(swModel.Extension.CustomPropertyManager("")) & vbCrLf
 
     ' GetViews: one array per sheet; element 0 of each is the sheet itself.
@@ -642,6 +648,7 @@ Private Function BuildDrawingData(swModel As SldWorks.ModelDoc2, _
     Else
         s = s & "- Everything was read without errors." & vbCrLf
     End If
+    Set mLayerMgr = Nothing
     BuildDrawingData = s
 End Function
 
@@ -714,7 +721,16 @@ Private Function SheetSection(swModel As SldWorks.ModelDoc2, _
     s = s & TitleBlockSource(swModel, swSheet, vViews, propsOut, doneModels) & vbCrLf
 
     For j = LBound(vViews) To UBound(vViews)
-        s = s & ViewSection(vViews(j), j = LBound(vViews), sheetName)
+        If j = LBound(vViews) Then
+            s = s & ViewSection(vViews(j), True, sheetName)
+        ElseIf CBool(TryValue(vViews(j), "GetVisible", VbMethod, True)) Then
+            s = s & ViewSection(vViews(j), False, sheetName)
+        Else
+            ' A hidden view doesn't print, so its dimensions would read
+            ' as missing from the PDF.
+            s = s & "### View: " & CStr(TryValue(vViews(j), "GetName2", VbMethod, "?")) & vbCrLf & _
+                "- Hidden: not on the print, so its contents are left out." & vbCrLf & vbCrLf
+        End If
     Next
     SheetSection = s
     Exit Function
@@ -987,28 +1003,33 @@ Private Function AnnotationsSection(swView As SldWorks.View, viewLabel As String
     Dim dims As String, notes As String, balloons As String, gtols As String, datums As String
     Dim formatText As String
     Dim nDims As Long, nCenterMarks As Long, nCenterLines As Long, nThreads As Long
-    Dim nFinish As Long, nWeld As Long, viewCfg As String
+    Dim nFinish As Long, nWeld As Long, nHidden As Long, viewCfg As String, viewModel As String
 
     viewCfg = swView.ReferencedConfiguration
+    viewModel = CStr(TryValue(swView, "GetReferencedModelName", VbMethod, ""))
     Set swAnn = swView.GetFirstAnnotation3
     Do While Not swAnn Is Nothing
-        Select Case swAnn.GetType
-            Case swDisplayDimension
-                nDims = nDims + 1
-                dims = dims & DimensionRow(swAnn, viewLabel, viewCfg)
-            Case swNote
-                AddNote swAnn, viewLabel, notes, balloons, formatText
-            Case swGTol
-                gtols = gtols & "- " & GtolText(swAnn.GetSpecificAnnotation) & AtText(swAnn) & _
-                        DanglingTag(swAnn, viewLabel, "GD&T frame") & vbCrLf
-            Case swDatumTag
-                datums = datums & AddDatumTag(swAnn, viewLabel)
-            Case swSFSymbol:      nFinish = nFinish + 1
-            Case swWeldSymbol:    nWeld = nWeld + 1
-            Case swCenterMarkSym: nCenterMarks = nCenterMarks + 1
-            Case swCenterLine:    nCenterLines = nCenterLines + 1
-            Case swCThread:       nThreads = nThreads + 1
-        End Select
+        If Not AnnotationShown(swAnn) Then
+            nHidden = nHidden + 1
+        Else
+            Select Case swAnn.GetType
+                Case swDisplayDimension
+                    nDims = nDims + 1
+                    dims = dims & DimensionRow(swAnn, viewLabel, viewCfg, viewModel)
+                Case swNote
+                    AddNote swAnn, viewLabel, notes, balloons, formatText
+                Case swGTol
+                    gtols = gtols & "- " & GtolText(swAnn.GetSpecificAnnotation) & AtText(swAnn) & _
+                            DanglingTag(swAnn, viewLabel, "GD&T frame") & vbCrLf
+                Case swDatumTag
+                    datums = datums & AddDatumTag(swAnn, viewLabel)
+                Case swSFSymbol:      nFinish = nFinish + 1
+                Case swWeldSymbol:    nWeld = nWeld + 1
+                Case swCenterMarkSym: nCenterMarks = nCenterMarks + 1
+                Case swCenterLine:    nCenterLines = nCenterLines + 1
+                Case swCThread:       nThreads = nThreads + 1
+            End Select
+        End If
         Set swAnn = swAnn.GetNext3
     Loop
 
@@ -1032,12 +1053,32 @@ Private Function AnnotationsSection(swView As SldWorks.View, viewLabel As String
             " | Cosmetic threads: " & nThreads & " | Surface finish symbols: " & nFinish & _
             " | Weld symbols: " & nWeld & vbCrLf
     End If
+    If nHidden > 0 Then s = s & "- Hidden annotations left out (they don't print): " & nHidden & vbCrLf
     If Len(s) = 0 Then s = "- No annotations." & vbCrLf
     AnnotationsSection = s
 End Function
 
+' False for an annotation that doesn't print: hidden by itself (also
+' "half-hidden", which hides once Hide/Show Annotations ends) or on a
+' hidden layer, which Visible doesn't report.
+Private Function AnnotationShown(swAnn As SldWorks.Annotation) As Boolean
+    Dim vis As Long, layerName As String, swLayer As SldWorks.Layer
+    AnnotationShown = True
+    vis = CLng(TryValue(swAnn, "Visible", VbGet, swAnnotationVisible))
+    If vis = swAnnotationHidden Or vis = swAnnotationHalfHidden Then
+        AnnotationShown = False
+        Exit Function
+    End If
+    If mLayerMgr Is Nothing Then Exit Function
+    layerName = CStr(TryValue(swAnn, "Layer", VbGet, ""))
+    If Len(layerName) = 0 Then Exit Function
+    On Error Resume Next
+    Set swLayer = mLayerMgr.GetLayer(layerName)
+    If Not swLayer Is Nothing Then AnnotationShown = CBool(swLayer.Visible)
+End Function
+
 Private Function DimensionRow(swAnn As SldWorks.Annotation, viewLabel As String, _
-                              viewCfg As String) As String
+                              viewCfg As String, viewModel As String) As String
     Dim swDispDim As SldWorks.DisplayDimension, swDim As SldWorks.Dimension
     Dim dimName As String, above As String, below As String
     Dim shownText As String, isAngle As Boolean, flags As String, ovVal As Double
@@ -1073,6 +1114,11 @@ Private Function DimensionRow(swAnn As SldWorks.Annotation, viewLabel As String,
         flags = flags & "model dim; "
     End If
     If CBool(TryValue(swDispDim, "Inspection", VbGet, False)) Then flags = flags & "inspection; "
+    ' The view's configuration is the assembly's; the component may use
+    ' another, so the value can differ from the print without an override.
+    If FromOtherModel(dimName, viewModel) Then
+        flags = flags & "component dim (value may be from another configuration than this view shows); "
+    End If
     If CBool(TryValue(swAnn, "IsDangling", VbMethod, False)) Then
         flags = flags & "DANGLING; "
         AddItem mFlagDangling, viewLabel & ": dimension " & dimName
@@ -1099,6 +1145,28 @@ Private Function DimSystemValue(swDim As SldWorks.Dimension, cfgName As String) 
         v = swDim.GetSystemValue3(swSpecifyConfiguration, Array(cfgName))
         If IsArray(v) Then DimSystemValue = v(LBound(v))
     End If
+End Function
+
+' True for a dimension of another model than the view's own, i.e. a
+' component's in an assembly view. FullName ends with the owning model,
+' e.g. "D1@Sketch1@Part4.Part"; drawing dimensions don't end in .Part or
+' .Assembly. File names may contain "@", so the end is compared whole.
+Private Function FromOtherModel(dimFullName As String, viewModelPath As String) As Boolean
+    Dim nm As String, ext As String, withExt As String, noExt As String, p As Long
+    If Len(viewModelPath) = 0 Then Exit Function
+    nm = LCase$(dimFullName)
+    p = InStrRev(nm, ".")
+    If p = 0 Or InStrRev(nm, "@") > p Then Exit Function
+    ext = Mid$(nm, p + 1)
+    If ext <> "part" And ext <> "assembly" Then Exit Function
+
+    ' The model may be named with or without its file extension.
+    withExt = "@" & LCase$(FileNameOf(viewModelPath)) & "." & ext
+    p = InStrRev(withExt, ".", Len(withExt) - Len(ext) - 1)
+    noExt = withExt
+    If p > 2 Then noExt = Left$(withExt, p - 1) & "." & ext
+    FromOtherModel = Right$(nm, Len(withExt)) <> withExt And _
+                     Right$(nm, Len(noExt)) <> noExt
 End Function
 
 Private Function ToleranceText(swDim As SldWorks.Dimension, isAngle As Boolean) As String

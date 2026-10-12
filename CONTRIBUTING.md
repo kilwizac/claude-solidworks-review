@@ -7,7 +7,7 @@ Issues and pull requests are welcome, especially:
 ## Working on it
 
 - **The macro:**
-  - `src/ClaudeReviewDrawing.bas` is the source. Import it into a `.swp` (see [Build the macro](README.md#build-the-macro)).
+  - `src/ClaudeReviewDrawing.bas` is the source. Import it into a `.swp` (see [Or build from source](README.md#or-build-from-source)).
   - If you edit in the VBA editor, export the module back over the `.bas` before committing.
   - `.swp` files aren't committed.
 - **The background review and report:**

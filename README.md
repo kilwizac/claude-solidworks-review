@@ -108,7 +108,7 @@ It uses the [AutoDrawing](https://github.com/kilwizac/solidworks-automate-drawin
   - Click a finding and the drawing zooms to its balloon. Click a balloon and the list jumps to that finding.
   - Findings that aren't about one spot (e.g. missing general notes) get a dashed balloon in the list and none on the sheet.
 - **Looks good** and **Questions** follow the findings. The page prints cleanly.
-- **Link to a finding:** clicking one puts `#finding-N` in the address. Copy it, and the page opens with that finding selected and zoomed.
+- **Link to a finding:** clicking one puts `#finding-N` in the address. Copy it, and the page opens with that finding selected and zoomed, also when you paste it into a page that's already open.
 - **Light or dark:** the page follows your Windows setting. The **Dark** / **Light** button in the header switches it, and the choice is remembered. Adding `?theme=light` or `?theme=dark` to the page's address forces one, e.g. for screenshots.
 
 Claude places each balloon from a `Pin` column in its findings (x,y as percent of the sheet). Where it can, it uses the sheet positions the macro records for every view, dimension and note.
@@ -146,6 +146,8 @@ Modes 0, 1 and 3 use Claude Desktop's [`claude://` links](https://support.claude
 
 Edit [`review-instructions.md`](review-instructions.md). You don't need to rebuild anything: it's read on every run and placed at the top of `drawing-data.md`. Add your shop's rules (standard notes, preferred tolerances, title-block conventions) under the checklist headings. Keep the **How to answer** section, because the report page reads that format.
 
+The installer keeps an edited checklist when you upgrade, and replaces one you never changed. The current default is always beside it as `review-instructions.default.md`.
+
 ---
 
 ## Privacy and security
@@ -178,7 +180,7 @@ Claude's answer is written to `review.md` by the script, not by Claude.
 
 | Symptom | Likely cause |
 | --- | --- |
-| A popup says Claude couldn't finish | The reason is in `claude-log.txt` in the run folder. The usual causes are that the CLI isn't signed in (run `claude` once) or that a plan limit was reached |
+| A popup says Claude couldn't finish | The popup gives the reason, and `claude-log.txt` in the run folder has the details. The usual causes are that the CLI isn't signed in (run `claude` once), that a plan limit was reached, or that the review ran past its 30-minute limit |
 | Nothing ever opens in background mode | Scripts are blocked by policy on this PC (see above), or PowerShell couldn't start. Try `LAUNCH_MODE 0` or `1` |
 | The page shows the PDF but no balloons | The sheet images come from Windows' built-in PDF renderer through Windows PowerShell 5.1, which the macro uses. Under PowerShell 7 the page falls back to the plain PDF |
 | A compile error after importing | Check the two SOLIDWORKS references (step 5 of the build) |

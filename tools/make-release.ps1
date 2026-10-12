@@ -68,6 +68,19 @@ foreach ($f in 'run-review.ps1', 'review-instructions.md', 'README.md', 'LICENSE
     Copy-Item -LiteralPath (Join-Path $repo $f) -Destination (Join-Path $stage 'app')
 }
 
+# The installed README has no docs\, src\ or installer\ beside it: its
+# links to files that aren't installed go to GitHub, at this version.
+$readme = Join-Path $stage 'app\README.md'
+$text = [IO.File]::ReadAllText($readme)
+$text = [regex]::Replace($text, '(\]\(|src="|srcset=")(?!https?:|mailto:|#)([^)"\s]+)', {
+    param($m)
+    $path = $m.Groups[2].Value
+    if (Test-Path -LiteralPath (Join-Path $stage ('app\' + ($path -replace '#.*$', '')))) { return $m.Value }
+    $kind = 'blob'; if ($path -match '\.(png|jpe?g|gif|svg)$') { $kind = 'raw' }
+    return $m.Groups[1].Value + "https://github.com/kilwizac/claude-solidworks-review/$kind/v$Version/$path"
+})
+[IO.File]::WriteAllText($readme, $text, (New-Object System.Text.UTF8Encoding $false))
+
 # Zip
 $dist = Join-Path $repo 'dist'
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
