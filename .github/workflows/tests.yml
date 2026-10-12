@@ -1,6 +1,7 @@
 # Runs tests\Run-Tests.ps1 on every push to main and every pull request:
 # everything that doesn't need SOLIDWORKS or Claude. The SOLIDWORKS
 # end-to-end test and the live review run locally (see CONTRIBUTING.md).
+# The PowerShell tests and the report page tests run side by side.
 name: Tests
 
 on:
@@ -17,8 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Windows
+  powershell:
+    name: Scripts, installer and release
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -28,22 +29,41 @@ jobs:
           # earlier releases.
           fetch-depth: 0
 
+      # Windows PowerShell 5.1, as the macro runs the scripts.
+      - name: Run the tests
+        shell: powershell
+        run: .\tests\Run-Tests.ps1 -SkipBrowser -CI
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: powershell-results
+          path: tests/.out/results/
+          if-no-files-found: ignore
+
+  report-page:
+    name: Report page (Edge)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: tests/browser/package-lock.json
 
-      # Windows PowerShell 5.1, as the macro runs the scripts.
       - name: Run the tests
         shell: powershell
-        run: .\tests\Run-Tests.ps1 -CI
+        run: .\tests\Run-Tests.ps1 -BrowserOnly -CI
 
       - name: Keep the results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: report-page-results
           path: |
             tests/.out/results/
             tests/browser/test-results/

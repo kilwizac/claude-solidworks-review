@@ -43,7 +43,7 @@ Pester 5 is used; if you don't have it, a copy is downloaded once into `tests\.t
 - **Before a pull request:** run the tests. If you changed the macro, rebuild the `.swp` and add `-SolidWorks`; mention your SOLIDWORKS version. If you changed `review-instructions.md`, add `-Live`.
 - **The end-to-end test** starts SOLIDWORKS 2025, or uses the running one, and closes only the documents it opened. It refuses to run if a `.swp` doesn't hold the code in its `.bas`: the tests read the VBA source out of the `.swp` (`tools\SwpSource.psm1`) and compare.
 - **`-UpdateFixtures`** with `-SolidWorks` saves the demo drawing's export as `tests\fixtures\demo`, and with `-Live` also Claude's review. Do it when the macro's output changes.
-- `-Path tests\RunReview.Tests.ps1` runs one file; `-SkipBrowser` leaves out the page tests.
+- `-Path tests\RunReview.Tests.ps1` runs one file; `-SkipBrowser` leaves out the page tests and `-BrowserOnly` runs only them.
 
 ## Releasing
 

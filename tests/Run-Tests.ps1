@@ -18,6 +18,7 @@
     -UpdateFixtures with -SolidWorks, copy the demo drawing's export to
                     tests\fixtures\demo; with -Live, also Claude's review.
     -SkipBrowser    leave out the report page tests.
+    -BrowserOnly    only the report page tests.
     -Path <files>   only these test files (e.g. tests\RunReview.Tests.ps1).
     -CI             also write JUnit results to tests\.out\results\.
 
@@ -32,6 +33,7 @@ param(
     [switch]$Live,
     [switch]$UpdateFixtures,
     [switch]$SkipBrowser,
+    [switch]$BrowserOnly,
     [string[]]$Path,
     [switch]$CI
 )
@@ -57,64 +59,67 @@ if ($PSVersionTable.PSEdition -eq 'Core' -or ($env:PSModulePath -match '\\PowerS
     $env:PSModulePath = $winModules
     $env:CRD_TESTS_RELAUNCHED = '1'
     $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
-    foreach ($s in 'SolidWorks', 'Live', 'UpdateFixtures', 'SkipBrowser', 'CI') { if ((Get-Variable $s).Value) { $argList += "-$s" } }
+    foreach ($s in 'SolidWorks', 'Live', 'UpdateFixtures', 'SkipBrowser', 'BrowserOnly', 'CI') { if ((Get-Variable $s).Value) { $argList += "-$s" } }
     if ($Path) { $argList += '-Path'; $argList += ($Path | ForEach-Object { (Resolve-Path $_).Path }) -join ',' }
     & powershell.exe @argList
     exit $LASTEXITCODE
 }
 if ($UpdateFixtures) { $env:CRD_UPDATE_FIXTURES = '1' }
 
-# ---------------------------------------------------------------------
-# Pester 5
-# ---------------------------------------------------------------------
-$pesterVersion = '5.7.1'
-function Find-Pester {
-    $local = Get-ChildItem -LiteralPath (Join-Path $tests '.tools\Pester') -Filter 'Pester.psd1' -Recurse -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($local) { return $local.FullName }
-    $installed = Get-Module -ListAvailable Pester | Where-Object { $_.Version -ge [version]'5.5.0' } |
-        Sort-Object Version -Descending | Select-Object -First 1
-    if ($installed) { return $installed.Path }
-    return $null
-}
-$pester = Find-Pester
-if (-not $pester) {
-    Write-Host "Pester 5 isn't installed; downloading Pester $pesterVersion into tests\.tools ..."
-    $dest = Join-Path $tests ".tools\Pester\$pesterVersion"
-    $zip = Join-Path ([IO.Path]::GetTempPath()) "Pester.$pesterVersion.zip"
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -UseBasicParsing -Uri "https://www.powershellgallery.com/api/v2/package/Pester/$pesterVersion" -OutFile $zip
-    New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
-    Remove-Item -LiteralPath $zip -Force
-    $pester = Find-Pester
-    if (-not $pester) { throw "Pester $pesterVersion couldn't be set up in $dest." }
-}
-Get-Module Pester | Remove-Module -Force
-Import-Module $pester -Force
-
-# ---------------------------------------------------------------------
-# Pester tests
-# ---------------------------------------------------------------------
 $failed = 0
 $resultsDir = Join-Path $tests '.out\results'
 if ($CI) { New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null }
 
-$cfg = New-PesterConfiguration
-if ($Path) { $cfg.Run.Path = @($Path | ForEach-Object { (Resolve-Path $_).Path }) } else { $cfg.Run.Path = $tests }
-$cfg.Run.PassThru = $true
-$cfg.Output.Verbosity = 'Detailed'
-$exclude = @()
-if (-not $SolidWorks) { $exclude += 'SolidWorks' }
-if (-not $Live) { $exclude += 'Live' }
-$cfg.Filter.ExcludeTag = $exclude
-if ($CI) {
-    $cfg.TestResult.Enabled = $true
-    $cfg.TestResult.OutputFormat = 'JUnitXml'
-    $cfg.TestResult.OutputPath = Join-Path $resultsDir 'pester.xml'
+if (-not $BrowserOnly) {
+    # ---------------------------------------------------------------------
+    # Pester 5
+    # ---------------------------------------------------------------------
+    $pesterVersion = '5.7.1'
+    function Find-Pester {
+        $local = Get-ChildItem -LiteralPath (Join-Path $tests '.tools\Pester') -Filter 'Pester.psd1' -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($local) { return $local.FullName }
+        $installed = Get-Module -ListAvailable Pester | Where-Object { $_.Version -ge [version]'5.5.0' } |
+            Sort-Object Version -Descending | Select-Object -First 1
+        if ($installed) { return $installed.Path }
+        return $null
+    }
+    $pester = Find-Pester
+    if (-not $pester) {
+        Write-Host "Pester 5 isn't installed; downloading Pester $pesterVersion into tests\.tools ..."
+        $dest = Join-Path $tests ".tools\Pester\$pesterVersion"
+        $zip = Join-Path ([IO.Path]::GetTempPath()) "Pester.$pesterVersion.zip"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -UseBasicParsing -Uri "https://www.powershellgallery.com/api/v2/package/Pester/$pesterVersion" -OutFile $zip
+        New-Item -ItemType Directory -Force -Path $dest | Out-Null
+        Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
+        Remove-Item -LiteralPath $zip -Force
+        $pester = Find-Pester
+        if (-not $pester) { throw "Pester $pesterVersion couldn't be set up in $dest." }
+    }
+    Get-Module Pester | Remove-Module -Force
+    Import-Module $pester -Force
+
+    # ---------------------------------------------------------------------
+    # Pester tests
+    # ---------------------------------------------------------------------
+
+    $cfg = New-PesterConfiguration
+    if ($Path) { $cfg.Run.Path = @($Path | ForEach-Object { (Resolve-Path $_).Path }) } else { $cfg.Run.Path = $tests }
+    $cfg.Run.PassThru = $true
+    $cfg.Output.Verbosity = 'Detailed'
+    $exclude = @()
+    if (-not $SolidWorks) { $exclude += 'SolidWorks' }
+    if (-not $Live) { $exclude += 'Live' }
+    $cfg.Filter.ExcludeTag = $exclude
+    if ($CI) {
+        $cfg.TestResult.Enabled = $true
+        $cfg.TestResult.OutputFormat = 'JUnitXml'
+        $cfg.TestResult.OutputPath = Join-Path $resultsDir 'pester.xml'
+    }
+    $result = Invoke-Pester -Configuration $cfg
+    $failed += @($result.Containers | Where-Object { $_.Result -eq 'Failed' }).Count
 }
-$result = Invoke-Pester -Configuration $cfg
-$failed += @($result.Containers | Where-Object { $_.Result -eq 'Failed' }).Count
 
 # ---------------------------------------------------------------------
 # Report page in a browser (Playwright, Microsoft Edge)

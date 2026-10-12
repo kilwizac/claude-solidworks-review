@@ -26,56 +26,13 @@ function Get-SwpModule {
     }
 }
 
-# Source lines as compared. The VBA editor rewrites code it imports: it
-# re-cases identifiers to match their declarations, re-spaces operators
-# and rewrites number literals (7.0 -> 7#). So outside strings and
-# comments, case, spacing and number spelling aren't edits; strings and
-# comments must match exactly. Attribute lines (VBA writes its own) and
-# blank lines at either end are left out.
-function ConvertTo-ComparableCode([string]$code) {
-    $c = $code.ToLowerInvariant()
-    # Number literals: 7.0 / 7# / 7.50 -> 7 / 7 / 7.5; .5 -> 0.5
-    $c = [regex]::Replace($c, '(?<![\w.])\.(\d)', '0.$1')
-    $c = [regex]::Replace($c, '(?<![\w.])(\d+)\.(\d*?)0*(?![\d])', { param($m) if ($m.Groups[2].Value) { $m.Groups[1].Value + '.' + $m.Groups[2].Value } else { $m.Groups[1].Value } })
-    $c = [regex]::Replace($c, '(?<![\w.])(\d+(?:\.\d+)?)[#!@]', '$1')
-    # Spacing: none around punctuation and operators, one space elsewhere.
-    $c = [regex]::Replace($c, '\s+', ' ')
-    $c = [regex]::Replace($c, '\s*([(),=+\-*/\\&<>:;^])\s*', '$1')
-    return $c.Trim()
-}
-
+# Source lines as compared with a .bas: the VBA editor's own rewriting
+# of imported code (case, spacing, number literals) is evened out, while
+# strings and comments must match exactly. See ComparableLines in
+# SwpSource.cs (done there: a character loop in PowerShell took a second
+# per macro).
 function ConvertTo-ComparableVba([string]$text) {
-    $out = New-Object System.Collections.Generic.List[string]
-    foreach ($line in ($text -replace "`r`n", "`n" -replace "`r", "`n") -split "`n") {
-        if ($line -match '^\s*Attribute\s+VB_') { continue }
-        $sb = New-Object System.Text.StringBuilder
-        $code = New-Object System.Text.StringBuilder
-        $inString = $false
-        for ($i = 0; $i -lt $line.Length; $i++) {
-            $ch = $line[$i]
-            if ($inString) {
-                [void]$sb.Append($ch)
-                if ($ch -eq '"') { $inString = $false }
-            } elseif ($ch -eq '"') {
-                [void]$sb.Append((ConvertTo-ComparableCode $code.ToString()))
-                [void]$code.Clear()
-                $inString = $true
-                [void]$sb.Append($ch)
-            } elseif ($ch -eq "'") {
-                [void]$sb.Append((ConvertTo-ComparableCode $code.ToString()))
-                [void]$code.Clear()
-                [void]$sb.Append($line.Substring($i).TrimEnd())
-                break
-            } else {
-                [void]$code.Append($ch)
-            }
-        }
-        [void]$sb.Append((ConvertTo-ComparableCode $code.ToString()))
-        $out.Add($sb.ToString().Trim())
-    }
-    while ($out.Count -gt 0 -and $out[$out.Count - 1] -eq '') { $out.RemoveAt($out.Count - 1) }
-    while ($out.Count -gt 0 -and $out[0] -eq '') { $out.RemoveAt(0) }
-    return ,$out.ToArray()
+    return ,[ClaudeReview.SwpSource]::ComparableLines($text)
 }
 
 # True when a module holds code, not just Attribute / Option lines.
