@@ -1,0 +1,1 @@
+﻿Please review the SOLIDWORKS drawing "DEMO-100" (1 sheet). The files are in the current folder: DEMO-100.pdf and drawing-data.md. drawing-data.md starts with the review checklist and answer format - follow it - then lists the exact values read from SOLIDWORKS (dimensions, tolerances, notes, GD&T, tables, properties). The PDF shows how the sheets look. Reply with the review only.

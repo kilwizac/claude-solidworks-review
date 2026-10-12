@@ -1,0 +1,11 @@
+{
+  "name": "claude-solidworks-review-report-tests",
+  "private": true,
+  "description": "Browser tests for review.html, the report page run-review.ps1 writes.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

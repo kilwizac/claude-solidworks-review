@@ -7,8 +7,23 @@
 - The drawing keeps its zoom when the window is resized or the drawing is shown again, and balloons change size much less while it zooms.
 - A background review that runs past 30 minutes is stopped with a message (`-TimeoutMinutes` changes the limit).
 - Dimensions of a component in an assembly view are flagged, since their value may come from another configuration than the view shows.
+- Automated tests (`tests\Run-Tests.ps1`), run by GitHub Actions on every push and pull request. Locally they can also drive SOLIDWORKS end to end on the demo drawing, and have Claude review it. See [CONTRIBUTING.md](CONTRIBUTING.md#tests).
+- `run-review.ps1 -NoDialog` reports errors only in `claude-log.txt` and the exit code (now 1 on failure), for scripts.
+- `tools\verify-release.ps1` checks a release zip, and a **Verify release** workflow runs it on every published release.
+
+### Changed
+- `tools\make-release.ps1`:
+  - checks the code inside each built macro against its `.bas`, instead of comparing file dates;
+  - always saves the release notes to `dist\`;
+  - with `-Upload` or the new `-DryRun`, refuses a release without a CHANGELOG section, with uncommitted or unpushed changes, or with its tag on another commit;
+  - runs the tests and `verify-release.ps1` before uploading, and creates the release on the tested commit.
 
 ### Fixed
+- Release zips use `/` in their paths. 0.2.0's used `\`, which only Windows reads.
+- A Pin written with percent signs (`62%, 41%`) puts a balloon on the drawing; before, the finding had none.
+- A finding with Sheet `0` gets a dashed balloon instead of one that does nothing when clicked.
+- An answer without a findings table no longer shows its Verdict line twice.
+- An error in a background review is written to `claude-log.txt` before the message box appears, not after it's closed.
 - Hidden annotations, annotations on hidden layers and hidden views are left out of `drawing-data.md`, so Claude doesn't flag what never prints.
 - When Claude Code fails (e.g. not signed in), its message is shown and logged instead of being saved as `review.md`.
 - A summary on the line after the Verdict line is no longer dropped from the report.
