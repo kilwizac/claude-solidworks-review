@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ClaudeReview
 {
@@ -96,6 +97,76 @@ namespace ClaudeReview
                 if (id == 0x0010) break; // end of dir
             }
             return modules;
+        }
+
+        // Source lines as compared with a .bas. The VBA editor rewrites
+        // code it imports: it re-cases identifiers to match their
+        // declarations, re-spaces operators and rewrites number literals
+        // (7.0 -> 7#). So outside strings and comments, case, spacing and
+        // number spelling aren't edits; strings and comments must match
+        // exactly. Attribute lines (VBA writes its own) and blank lines at
+        // either end are left out.
+        public static string[] ComparableLines(string text)
+        {
+            var lines = new List<string>();
+            foreach (string line in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+            {
+                if (AttributeLine.IsMatch(line)) continue;
+                var sb = new StringBuilder();
+                var code = new StringBuilder();
+                bool inString = false;
+                for (int i = 0; i < line.Length; i++)
+                {
+                    char ch = line[i];
+                    if (inString)
+                    {
+                        sb.Append(ch);
+                        if (ch == '"') inString = false;
+                    }
+                    else if (ch == '"')
+                    {
+                        sb.Append(ComparableCode(code.ToString()));
+                        code.Clear();
+                        inString = true;
+                        sb.Append(ch);
+                    }
+                    else if (ch == '\'')
+                    {
+                        sb.Append(ComparableCode(code.ToString()));
+                        code.Clear();
+                        sb.Append(line.Substring(i).TrimEnd());
+                        break;
+                    }
+                    else code.Append(ch);
+                }
+                sb.Append(ComparableCode(code.ToString()));
+                lines.Add(sb.ToString().Trim());
+            }
+            while (lines.Count > 0 && lines[lines.Count - 1].Length == 0) lines.RemoveAt(lines.Count - 1);
+            while (lines.Count > 0 && lines[0].Length == 0) lines.RemoveAt(0);
+            return lines.ToArray();
+        }
+
+        static readonly Regex AttributeLine = new Regex(@"^\s*Attribute\s+VB_", RegexOptions.IgnoreCase);
+        static readonly Regex LeadingDot = new Regex(@"(?<![\w.])\.(\d)");
+        static readonly Regex Decimals = new Regex(@"(?<![\w.])(\d+)\.(\d*?)0*(?![\d])");
+        static readonly Regex TypeSuffix = new Regex(@"(?<![\w.])(\d+(?:\.\d+)?)[#!@]");
+        static readonly Regex Spaces = new Regex(@"\s+");
+        static readonly Regex Punctuation = new Regex(@"\s*([(),=+\-*/\\&<>:;^])\s*");
+
+        // Code outside strings and comments: lower case, numbers as plain
+        // decimals (7.0 / 7# / 7.50 -> 7 / 7 / 7.5; .5 -> 0.5), no spaces
+        // around punctuation and operators, one space elsewhere.
+        static string ComparableCode(string code)
+        {
+            if (code.Length == 0) return code;
+            string c = code.ToLowerInvariant();
+            c = LeadingDot.Replace(c, "0.$1");
+            c = Decimals.Replace(c, m => m.Groups[2].Value.Length > 0 ? m.Groups[1].Value + "." + m.Groups[2].Value : m.Groups[1].Value);
+            c = TypeSuffix.Replace(c, "$1");
+            c = Spaces.Replace(c, " ");
+            c = Punctuation.Replace(c, "$1");
+            return c.Trim();
         }
 
         // [MS-OVBA] 2.4.1 decompression of a CompressedContainer at start.
