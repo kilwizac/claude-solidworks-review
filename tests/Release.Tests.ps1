@@ -128,7 +128,7 @@ Describe 'make-release.ps1' {
     Context 'Building the zip' {
         BeforeAll {
             $copy = New-RepoCopy (Join-Path $TestDrive 'repo')
-            Add-ChangelogSection $copy '9.8.7' 'A feature only this test knows about.'
+            Add-ChangelogSection $copy '9.8.7' 'A feature only this test knows about. See [the tests](CONTRIBUTING.md#tests), [a site](https://example.com/x) and [below](#fixed).'
             $res = Invoke-Tool $copy 'make-release.ps1' @('-Version', '9.8.7')
             $zip = Join-Path $copy 'dist\ClaudeSolidWorksReview-9.8.7.zip'
             $readme = ''
@@ -182,6 +182,12 @@ Describe 'make-release.ps1' {
             $notes | Should -Match 'A feature only this test knows about\.'
             $notes | Should -Not -Match 'One-step install'
             $notes | Should -Not -Match '(?m)^## '
+        }
+        It 'points relative links in the notes at GitHub, at this version' {
+            $notes = [IO.File]::ReadAllText((Join-Path $copy 'dist\release-notes-9.8.7.md'))
+            $notes | Should -Match ([regex]::Escape('[the tests](https://github.com/kilwizac/claude-solidworks-review/blob/v9.8.7/CONTRIBUTING.md#tests)'))
+            $notes | Should -Match ([regex]::Escape('[a site](https://example.com/x)'))
+            $notes | Should -Match ([regex]::Escape('[below](#fixed)'))
         }
         It 'makes a zip that verify-release.ps1 passes' {
             $v = Invoke-Tool $copy 'verify-release.ps1' @('-Zip', $zip)
