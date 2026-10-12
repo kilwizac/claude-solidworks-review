@@ -241,11 +241,18 @@ if (-not (Get-ChildItem -LiteralPath $stageRoot -ErrorAction SilentlyContinue)) 
 Write-Host "Built $zip ($([int]((Get-Item -LiteralPath $zip).Length / 1KB)) KB)"
 
 # ---------------------------------------------------------------------
-# Release notes: this version's CHANGELOG section.
+# Release notes: this version's CHANGELOG section. A release page has
+# no files beside it, so relative links go to GitHub at this version.
 # ---------------------------------------------------------------------
 $notes = Join-Path $dist "release-notes-$Version.md"
 $body = "Download **$name.zip**, extract it, and double-click **Install.cmd**.`n`n"
-if ($section.Success) { $body += $section.Groups[1].Value.Trim() + "`n" }
+if ($section.Success) {
+    $body += [regex]::Replace($section.Groups[1].Value.Trim(), '(\]\()(?!https?:|mailto:|#)([^)\s]+)', {
+        param($m)
+        $kind = 'blob'; if ($m.Groups[2].Value -match '\.(png|jpe?g|gif|svg)$') { $kind = 'raw' }
+        return $m.Groups[1].Value + "https://github.com/$ghRepo/$kind/$tag/" + $m.Groups[2].Value
+    }) + "`n"
+}
 else { Write-Warning "CHANGELOG.md has no '## $Version' section, so the release notes are only the download line." }
 [IO.File]::WriteAllText($notes, $body, $utf8)
 Write-Host "Release notes: $notes"
