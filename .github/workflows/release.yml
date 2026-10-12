@@ -1,0 +1,49 @@
+name: Verify release
+
+# Checks a published release's zip the way a user gets it: the layout,
+# line endings, the code inside the built macros against the tag's .bas
+# files, README links (and that they answer), a quiet install, and a
+# review page rendered by the installed run-review.ps1.
+#
+# The checking scripts come from the default branch, so a fix to them
+# applies to every release; the .bas files come from the release's tag.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify, e.g. v0.3.0
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the default branch, with tags
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Download the release zip
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --pattern '*.zip' --dir release
+          exit $LASTEXITCODE
+
+      - name: Verify the zip
+        shell: powershell
+        run: |
+          $zip = Get-ChildItem release -Filter '*.zip' | Select-Object -First 1
+          if (-not $zip) { throw "Release $env:TAG has no .zip asset." }
+          .\tools\verify-release.ps1 -Zip $zip.FullName -Version ($env:TAG -replace '^v', '') -SourceRef $env:TAG -CheckLinks
+          exit $LASTEXITCODE
