@@ -12,8 +12,9 @@
 
   -RenderOnly rebuilds review.html from an existing review.md without
   asking Claude again (e.g. after editing the page below). -NoOpen skips
-  opening the page. -TimeoutMinutes (default 30) stops a review that
-  hangs.
+  opening the page. -NoDialog reports errors only in claude-log.txt and
+  the exit code (1), without a message box, for scripts and tests.
+  -TimeoutMinutes (default 30) stops a review that hangs.
 
   Follow-up questions: open a terminal in the run folder and run
   `claude --continue`.
@@ -28,7 +29,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Folder,
     [switch]$RenderOnly,
     [switch]$NoOpen,
-    [int]$TimeoutMinutes = 30
+    [switch]$NoDialog,
+    [double]$TimeoutMinutes = 30
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,7 +88,7 @@ function Invoke-ClaudeReview {
         -NoNewWindow -PassThru
     # Hold the handle now; without it ExitCode reads empty after the wait.
     $null = $proc.Handle
-    if (-not $proc.WaitForExit($TimeoutMinutes * 60000)) {
+    if (-not $proc.WaitForExit([int]($TimeoutMinutes * 60000))) {
         # /T: anything Claude Code started goes too.
         try { & taskkill.exe /PID $proc.Id /T /F *> $null } catch { }
         try { if (-not $proc.HasExited) { $proc.Kill() } } catch { }
@@ -290,8 +292,9 @@ function Get-Severity([string]$text) {
 }
 
 # "62,41" (percent of the sheet from top-left) -> @(62, 41), else $null.
+# "62%, 41%" too.
 function Get-Pin([string]$text) {
-    $m = [regex]::Match($text, '(\d+(?:\.\d+)?)\s*[,;/ ]\s*(\d+(?:\.\d+)?)')
+    $m = [regex]::Match($text, '(\d+(?:\.\d+)?)\s*%?\s*[,;/ ]\s*(\d+(?:\.\d+)?)')
     if (-not $m.Success) { return $null }
     $x = [Math]::Min(100.0, [Math]::Max(0.0, [double]::Parse($m.Groups[1].Value, $inv)))
     $y = [Math]::Min(100.0, [Math]::Max(0.0, [double]::Parse($m.Groups[2].Value, $inv)))
@@ -427,7 +430,7 @@ function Write-ReviewHtml {
             $fixHtml = ''
             if ($f.Fix) { $fixHtml = '<p class="fix"><span class="fix-k">Fix</span>' + (ConvertTo-Html-Inline $f.Fix) + '</p>' }
 
-            $hasPin = ($null -ne $f.Pin) -and ($images.Count -ge $f.SheetNo)
+            $hasPin = ($null -ne $f.Pin) -and ($f.SheetNo -ge 1) -and ($images.Count -ge $f.SheetNo)
             $pinAttr = ''
             if ($hasPin) {
                 # Balloons that would sit on top of one another go to the
@@ -467,7 +470,7 @@ function Write-ReviewHtml {
         }
     } else {
         # No findings table: show the whole answer as a document.
-        $restHtml = ConvertTo-Html-Blocks $lines
+        $restHtml = ConvertTo-Html-Blocks (Remove-VerdictLine $lines)
     }
     $total = $counts.critical + $counts.major + $counts.minor + $counts.info
 
@@ -1026,6 +1029,8 @@ try {
 }
 catch {
     $msg = $_.Exception.Message
-    try { Show-Error $msg } catch { }
+    # Logged first: the message box waits for a click.
     Write-Log ("ERROR: " + $msg)
+    if (-not $NoDialog) { try { Show-Error $msg } catch { } }
+    exit 1
 }
